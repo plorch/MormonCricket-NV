@@ -1,0 +1,1668 @@
+---
+title: "Import_NDA_MC_reports"
+author: "Patrick Lorch"
+date: "6/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## To Do
+
+See https://github.com/plorch/MormonCricket/projects/1
+
+## Set up some functions
+
+```{r functions}
+lat_from_GPS <- function(gps){
+    tlat = gsub(".*,A,(.+),N,.*", "\\1", gps)
+    latitude = as.numeric(substring(tlat,1,2)) + 
+        as.numeric(substring(tlat,3,))/60
+    latitude
+}
+long_from_GPS <- function(gps){
+    tlat = gsub(".*,N,(.),W,.*", "\\1", gps)
+    longitude = as.numeric(substring(tlat,1,3)) + 
+        as.numeric(substring(tlat,4,))/60
+    longitude
+}
+
+# install.packages(readxl)
+library(readxl)
+## add the filename as a column alongside the result of read.csv
+read.xls.with.name <- function(f, year, ...){
+    cbind(ibutton=sub("\\.xls$", "", basename(f)), year, read_excel(f, ...))
+}
+
+## read all the ibutton files in one folder
+# I did not use this, in the end.
+read.nda.folder <- function(folder,year,skip_lines=0,...){
+    # foldername <- paste0("./",folder)
+    ibut.files <- dir(path=folder,full=TRUE,pattern="*.xls")
+    ibut.dat <- lapply(ibut.files,
+                       read.xls.with.name,
+                       year = year,
+                       skip = skip_lines)
+    names(ibut.dat) <- lapply(ibut.files, 
+                              function(f) sub("\\.xls$", "", basename(f)))
+    ibut.dat
+}
+
+```
+
+
+## Import data
+
+### Import 2002-2008
+
+#### 2002
+
+There were 3 2002 Excel files that I imported with the 2003 data before realizing it was 2002 data.  So they were imported the same way.
+
+I moved their fixes here and commented them out of the section below to eliminate them for now to make reading maps easier.
+
+Because Curtis Irwin was not intending to include 2002 data, these are likely not all the files for 2002
+
+```{r import2002}
+# Get rid of weekly summaries from right side of sheet
+gh_nv_data12treated = gh_nv_data12treated[,1:11]
+# To include it in one of the lists, add this
+# gh_nv_data12treated = gh_nv_data12treated,
+# gh_nv_data12surveyed = gh_nv_data12surveyed,
+
+gh_5_23_03$Latitude = lat_from_GPS(gh_5_23_03$GPS)
+gh_5_23_03$Longitude = -long_from_GPS(gh_5_23_03$GPS)
+gh04_18_03$Latitude = lat_from_GPS(gh04_18_03$GPS)
+gh04_18_03$Longitude = -long_from_GPS(gh04_18_03$GPS)
+
+gh_5_23_03$Species3 = as.character(gh_5_23_03$Species3)
+
+# Combining or renaming here to have them in similar format
+df_2002_treated = gh_nv_data12treated
+df_2002_47 = bind_rows(list(gh_5_23_03,gh04_18_03), .id = "SourceFile")
+```
+
+#### 2003
+
+2003 data were imported using Import Dataset, From Excel for each sheet seperately due to the messy differences between weeks.
+
+* These are each 1 week of data.  Not sure what the different formats mean.
+
+* Jeff Knight said that some of these were entered from paper.
+
+* I was importing these and formating dates during the input, but this lost time data if it was entered in some files (formating issue), so switched to "text" for some, which will mean a shit show for date variables because formats were not consistent (even within years).
+
+  * I imported using the Import Dataset tab's From Excel function in Environment tab
+    * It uses readxl::read_excel() as follows worked.  I changed the Timestamp and Date1 vars to use date.
+`gh06_02_03 <- read_excel("NDA MCGH Surveys/2003/gh06_02_03.xls", 
+     col_types = c("numeric", "numeric", "text", 
+         "date", "text", "text", "text", "text", 
+         "date", "numeric", "numeric", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "text", "numeric", "text", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "text", "text", "numeric", "text"))`
+
+* Then I plan to make a list of similar shaped files and read them in in one go.
+
+#### Details about file formats and readability
+
+Filename  |  Sheets  |  Columns  | MacNumberCanRead  | CoordinateType  | Notes
+----------|----------|-----------|-------------------|-----------------|
+gh04_18_03|  1       |  45       |  No               |  DDDmm.mmmm   |  Actually a 2002 file
+gh05_19_03a| 1       |  11       |  Yes              |  LatLong        | 
+gh_5_23_03|  1       |  45       |  No               |  DDDmm.mmmm   |  Actually a 2002 file
+grass6_03a| 1        |  11       |  Yes              |  LatLong        | 
+gh06_02_03|  1       |  44       |  No               |  DDDmm.mmmm   |  Dates from 1999, 2002 and bad dates
+gh06_02_03a|  1      |  11       |  Yes              |  LatLong     |  No header, tab called QRY_grasshopper4
+gh06_06_03|  1       |  45       |  No               |  DDDmm.mmmm   |  
+gh06_20_03|  1       |  45       |  No               |  DDDmm.mmmm   |  
+gh06_27_03|  1       |  45       |  No               |  DDDmm.mmmm   |  
+gh07_17_03|  1       |  45       |  No               |  DDDmm.mmmm   |  
+gh_nv_data12| 2      |  11, 9    |  Yes              |  LatLong        | Actually a 2002 file
+NV_data2_03| 3      |  11, 11, 9 |  Yes              |  LatLong        |  Embedded summary table
+NV_data3_03| 2      |  11, 9     |  Yes              |  LatLong        |  Embedded summary table
+NV_data4_03| 2      |  11, 9     |  Yes              |  LatLong        |  Embedded summary table
+NV_data5_03| 2      |  11, 9     |  Yes              |  LatLong        |  Embedded summary table
+wa04_18_03|  1       |  44       |  No               |  DDDmm.mmmm   |  
+wa05_27_03|  1       |  44       |  No               |  DDDmm.mmmm   |  
+wa05_27_03a|  3      |  8, 9, 11 |  Yes              |  LatLong, DDDmm.mmmm   |  Species missing from QRY_grasshopper4 file
+
+I check that column names match in each group and then fix it if they don't.
+
+#### Importing
+
+```{r import2003}
+
+names_2003_45 = data.frame(
+#                           gh_5_23_03 = names(gh_5_23_03), 
+#                           gh04_18_03 =  names(gh04_18_03), 
+                           gh06_06_03 =  names(gh06_06_03), 
+                           gh06_20_03 =  names(gh06_20_03), 
+                           gh06_27_03 =  names(gh06_27_03), 
+                           gh07_17_03 =  names(gh07_17_03), 
+                           grass6_03 =  names(grass6_03))
+names_2003_45
+names_2003_44 = data.frame(gh06_02_03 =  names(gh06_02_03), 
+                           wa04_18_03 =  names(wa04_18_03), 
+                           wa05_27_03 =  names(wa05_27_03))
+names_2003_44
+
+# Add column and reorder
+gh06_02_03$PoundsUsed = NA
+wa04_18_03$PoundsUsed = NA
+wa05_27_03$PoundsUsed = NA
+gh06_02_03 = gh06_02_03[,c(1:43,45,44)]
+wa04_18_03 = wa04_18_03[,c(1:43,45,44)]
+wa05_27_03 = wa05_27_03[,c(1:43,45,44)]
+
+# Extract Latitude and Longitude from the GPS text field
+gh06_06_03$Latitude = lat_from_GPS(gh06_06_03$GPS)
+gh06_06_03$Longitude = -long_from_GPS(gh06_06_03$GPS)
+gh06_20_03$Latitude = lat_from_GPS(gh06_20_03$GPS)
+gh06_20_03$Longitude = -long_from_GPS(gh06_20_03$GPS)
+gh06_27_03$Latitude = lat_from_GPS(gh06_27_03$GPS)
+gh06_27_03$Longitude = -long_from_GPS(gh06_27_03$GPS)
+gh07_17_03$Latitude = lat_from_GPS(gh07_17_03$GPS)
+gh07_17_03$Longitude = -long_from_GPS(gh07_17_03$GPS)
+grass6_03$Latitude = lat_from_GPS(grass6_03$GPS)
+grass6_03$Longitude = -long_from_GPS(grass6_03$GPS)
+gh06_02_03$Latitude = lat_from_GPS(gh06_02_03$GPS)
+gh06_02_03$Longitude = -long_from_GPS(gh06_02_03$GPS)
+wa04_18_03$Latitude = lat_from_GPS(wa04_18_03$GPS)
+wa04_18_03$Longitude = -long_from_GPS(wa04_18_03$GPS)
+wa05_27_03$Latitude = lat_from_GPS(wa05_27_03$GPS)
+wa05_27_03$Longitude = -long_from_GPS(wa05_27_03$GPS)
+
+# Go through other files and remove rows and cols of summary etc.
+#    Thought about removing records with no GPS, but there is often a stopID
+
+# Capture for later use
+names_gh05_19_03a = names(gh05_19_03a)
+
+gh05_19_03a$Latitude = gh05_19_03a$...17
+gh05_19_03a$Longitude = gh05_19_03a$...18
+# which(is.na(gh05_19_03a$GPS))
+names(gh05_19_03a)
+gh05_19_03a = gh05_19_03a[,-(12:18)]
+
+# This one lacked names and order was wrong which means I had to guess what variable names should be
+names(gh06_02_03a) = names_gh05_19_03a
+gh06_02_03a$Latitude = gh06_02_03a$...17
+gh06_02_03a$Longitude = gh06_02_03a$...18
+names(gh06_02_03a)[8:9]
+gh06_02_03a = gh06_02_03a[,c(1:7,9,8,10:20)]
+names(gh06_02_03a)[8:9] = names(gh06_02_03a)[9:8] 
+gh06_02_03a = gh06_02_03a[,-(12:18)]
+
+names(grass6_03a)
+grass6_03a$Latitude = grass6_03a$...17
+grass6_03a$Longitude = grass6_03a$...18
+grass6_03a = grass6_03a[,-(12:18)]
+
+names(wa05_27_03a)
+wa05_27_03a$Latitude = wa05_27_03a$...14
+wa05_27_03a$Longitude = wa05_27_03a$...15
+wa05_27_03a = wa05_27_03a[,-(9:15)]
+wa05_27_03a$Species1 = NA
+wa05_27_03a$PercentSp1 = NA
+wa05_27_03a$PoundsUsed = NA
+wa05_27_03a = wa05_27_03a[,c(1:5,11,12,6:8,13,9,10)]
+
+# Drop weekly summaries from "*treated*" data.frames
+# This one had a ton of summary rows, so deleted, saved as .csv and re-imported
+library(readr)
+NV_data2_03treated1 <- read_csv("NDA MCGH Surveys/2003/8_11columns_messy/NV_data2_03_treated1/treated_1-Table 1.csv")
+NV_data2_03treated1$Date = as.POSIXct(NV_data2_03treated1$Date, 
+                                      format = "%m/%d/%y")
+
+NV_data2_03treated2 = NV_data2_03treated2[,1:11]
+NV_data3_03treated2 = NV_data3_03treated2[,1:11]
+NV_data4_03treated2 = NV_data4_03treated2[,1:11]
+NV_data5_03treated = NV_data5_03treated[,1:11]
+# wa05_27_03atreated = wa05_27_03atreated[,1:11]
+wa05_27_03atreated <- read_csv("NDA MCGH Surveys/2003/8_11columns_messy/wa05_27_03a/treated-Table 1.csv")
+wa05_27_03atreated$Date = as.POSIXct(wa05_27_03atreated$Date, 
+                                      format = "%m/%d/%y")
+
+# Load the functions for lat and long extraction from GPS text field
+```
+
+#### Combining like files 
+
+First by making a list of files and then using bind_rows()
+
+```{r combine2003}
+# Fixes after errors get thrown
+gh06_02_03$Species3 = as.character(gh06_02_03$Species3)
+wa04_18_03$Species2 = as.character(wa04_18_03$Species2)
+wa04_18_03$Species3 = as.character(wa04_18_03$Species3)
+
+df_list_2003_47 = list(
+                  # gh_5_23_03 = gh_5_23_03,
+                  # gh04_18_03 =  gh04_18_03,
+                  gh06_06_03 =  gh06_06_03,                    
+                  gh06_20_03 =  gh06_20_03,                    
+                  gh06_27_03 =  gh06_27_03,                    
+                  gh07_17_03 =  gh07_17_03,                    
+                   grass6_03 =  grass6_03,
+                  gh06_02_03 =  gh06_02_03,
+                  wa04_18_03 =  wa04_18_03,
+                  wa05_27_03 =  wa05_27_03)
+df_2003_47 = bind_rows(df_list_2003_47,.id = "SourceFile")
+
+df_list_2003_surveyed = list(NV_data2_03surveyed = NV_data2_03surveyed,
+                             NV_data3_03surveyed = NV_data3_03surveyed,
+                             NV_data4_03surveyed = NV_data4_03surveyed,
+                             NV_data5_03surveyed = NV_data5_03surveyed,
+#                             NVdata04_N_survey = NVdata04_N_survey,
+                             wa05_27_03asurveyed = wa05_27_03asurveyed)
+df_2003_surveyed = bind_rows(df_list_2003_surveyed, .id = "SourceFile")
+
+# Fixes based on errors from list creation
+# NV_data2_03treated1$Latitude = as.numeric(NV_data2_03treated1$Latitude)
+# NV_data2_03treated1$Longitude = as.numeric(NV_data2_03treated1$Longitude)
+# NV_data2_03treated1$`GH Density` = as.numeric(NV_data2_03treated1$`GH Density`)
+# NV_data2_03treated1$`MC Density` = as.numeric(NV_data2_03treated1$`MC Density`)
+# NV_data2_03treated1$`# of bait used` = as.numeric(NV_data2_03treated1$`# of bait used`)
+# wa05_27_03atreated$`GH Density` = as.numeric(wa05_27_03atreated$`GH Density`)
+# wa05_27_03atreated$`# of bait used` = as.numeric(wa05_27_03atreated$`# of bait used`)
+
+df_list_2003_treated = list(NV_data2_03treated1 = NV_data2_03treated1,
+                             NV_data2_03treated2 = NV_data2_03treated2,
+                             NV_data3_03treated2 = NV_data3_03treated2,
+                             NV_data4_03treated2 = NV_data4_03treated2,
+                             NV_data5_03treated = NV_data5_03treated,
+#                             NVdata04_N_treated = NVdata04_N_treated,
+                             wa05_27_03atreated = wa05_27_03atreated)
+df_2003_treated = bind_rows(df_list_2003_treated, .id = "SourceFile")
+
+df_list_2003_a13 = list(gh05_19_03a =gh05_19_03a,
+                        gh06_02_03a = gh06_02_03a,
+                        grass6_03a = grass6_03a,
+                        wa05_27_03a = wa05_27_03a)
+df_2003_a13 = bind_rows(df_list_2003_a13, .id = "SourceFile")
+
+names_2003_47 = names(df_2003_47)
+names_2003_surveyed = names(df_2003_surveyed)
+names_2003_treated = names(df_2003_treated)
+names_2003_a13 = names(df_2003_a13)
+
+write.csv(rbind(names_2003_47,
+                names_2003_surveyed,
+                names_2003_treated,
+                names_2003_a13), "names_2003.csv")
+```
+
+#### 2004
+
+NVdata04_N_survey and NVdata04_N_treated are formated exactly as above.
+
+```{r import2004}
+library(readxl)
+
+fin_mc04 <- read_excel("NDA MCGH Surveys/2004/fin_mc04.xls")
+names(fin_mc04)
+fin_mc04$date = as.Date(fin_mc04$date)
+
+Fixed_crickets_04_treated <- 
+     read_excel("NDA MCGH Surveys/2004/Fixed_crickets.xls", 
+     sheet = "Treated Summary")
+names(Fixed_crickets_04_treated)
+Fixed_crickets_04_treated = Fixed_crickets_04_treated[,-(11:14)]
+# Found come totals that need to be removed
+Fixed_crickets_04_treated = Fixed_crickets_04_treated[-(1173:1181),]
+
+Fixed_crickets_04_treated$TimeStamp = as.POSIXct(Fixed_crickets_04_treated$TimeStamp)
+
+NVdata04_N_survey <- read_excel("NDA MCGH Surveys/2004/NVdata04_N.xls", 
+     sheet = "Survey")
+names(NVdata04_N_survey)
+NVdata04_N_survey$Date = as.POSIXct(NVdata04_N_survey$Date)
+
+NVdata04_N_treated <- read_excel("NDA MCGH Surveys/2004/NVdata04_N.xls", 
+     sheet = "Treated")
+names(NVdata04_N_treated)
+NVdata04_N_treated = NVdata04_N_treated[,-(11:12)]
+NVdata04_N_treated$Date = as.POSIXct(NVdata04_N_treated$Date)
+
+```
+
+#### 2005
+
+* A large number of 2005 points came through with no coordinates.
+* This caused me to look back at the original files.
+* There are just over 100 rows that have data displaced to different columns. 
+  * Not easy to tell where they belong
+* There are also 2 with no - sign on longitude and one with longitude or 555.0
+* I attempted to fix these in spreadsheet to reimported them
+* However, there are no dates or stopnums associated with these points
+  * so not clear how useful they will be
+  * eliminated them and fixed messed up longitudes after import
+* There are 521 with Species1 == NA, 119 of these say mention crickets in Notes
+  * This leaves 402 we cannot be sure are all Crickets
+
+```{r import2005}
+library(readxl)
+
+# Found a bunch of problems and fixed in numbers
+X2005MC_GH_survey <- read_excel("NDA MCGH Surveys/2005/2005MC_GH surveyFixed.xlsx")
+names(X2005MC_GH_survey)
+X2005MC_GH_survey$longitude = as.numeric(X2005MC_GH_survey$longitude)
+X2005MC_GH_survey$latitude = as.numeric(X2005MC_GH_survey$latitude)
+# These seem to be entries with no locations, not mis-aligned columns
+which(X2005MC_GH_survey$longitude == 0)
+which(X2005MC_GH_survey$latitude == 0)
+X2005MC_GH_survey = X2005MC_GH_survey[X2005MC_GH_survey$longitude != 0 & X2005MC_GH_survey$latitude != 0,]
+X2005MC_GH_survey$longitude[which(X2005MC_GH_survey$longitude > 0)] # Found these by sorting
+which(X2005MC_GH_survey$longitude > 0)
+X2005MC_GH_survey$longitude[c(399,648)] = 
+  X2005MC_GH_survey$longitude[c(399,648)] * -1
+X2005MC_GH_survey = X2005MC_GH_survey[-561,] # Eliminate one with Long = 555
+which(X2005MC_GH_survey$latitude < 0) # None
+# There were lots of cases where Species1 == NA, PerSqyd == 0 and Notes contains cricket.  These could be good zeros, so we need to find them and eliminate other Species1 == NA
+# unique(X2005MC_GH_survey$Notes)
+# tX2005 = data.frame(X2005MC_GH_survey$Notes,
+#   grepl("crick", tolower(X2005MC_GH_survey$Notes)))
+# rm(tX2005)
+unique(X2005MC_GH_survey$Notes[
+  grepl("crick", tolower(X2005MC_GH_survey$Notes))])
+table(X2005MC_GH_survey$Species1, useNA = "ifany")
+
+# Only do these once
+X2005MC_GH_survey$Species1[which(X2005MC_GH_survey$Species1 == "ANABRUS")] = "Anabrus simplex"
+X2005MC_GH_survey$Species1[which(X2005MC_GH_survey$Species1 == "Anabrus si Anabrus simplex mplex")] = "Anabrus simplex"
+X2005MC_GH_survey$Species1[which(X2005MC_GH_survey$Species1 == "Anabrus Simplex")] = "Anabrus simplex"
+X2005MC_GH_survey$Species1[which(X2005MC_GH_survey$Species1 == "mc")] = "Anabrus simplex"
+X2005MC_GH_survey$Species1[which(X2005MC_GH_survey$Species1 == "mormon")] = "Anabrus simplex"
+X2005MC_GH_survey = X2005MC_GH_survey[-(which(X2005MC_GH_survey$Species1 == "ask jeff")),]
+X2005MC_GH_survey = X2005MC_GH_survey[-(which(X2005MC_GH_survey$Species1 ==
+                                        "Trimerotropis etc.")),]
+
+X2005MC_GH_survey$DateTime = X2005MC_GH_survey$Date
+X2005MC_GH_survey$Date = as.Date(X2005MC_GH_survey$DateTime)
+
+X2005MC_GH_survey_2 = X2005MC_GH_survey[grepl("crick", 
+                                              tolower(X2005MC_GH_survey$Notes)),]
+# tX2005MC_2 = X2005MC_GH_survey[is.na(X2005MC_GH_survey$Species1) &
+#                               !grepl("crick", tolower(X2005MC_GH_survey$Notes)),]
+
+Survey_Report_form_090205 <- read_excel("NDA MCGH Surveys/2005/Survey Report form 090205.xls")
+names(Survey_Report_form_090205)
+which(Survey_Report_form_090205$longitude == 0) # These were both empty sets
+which(Survey_Report_form_090205$latitude == 0)
+# All of these are marked -1 for GH density, so are assumed to be MC
+#  So we need to 
+#    remove any we are not sure are MC from X2005MC_GH_survey
+#    remove filter by "simplex" from combine step
+Survey_Report_form_090205$DateTime = Survey_Report_form_090205$Date
+Survey_Report_form_090205$Date = as.Date(Survey_Report_form_090205$DateTime)
+
+```
+
+#### 2006
+
+Column names for each file were almost the same as 2005.
+
+* This one is a big mess
+  * both files contain both MC and GH records
+  * X2006 file has lots of Species1 == NA with whether it is MC or GH in notes sometimes
+  * SurveyReport has no Species1 field and has MC vs GH in some notes
+* Pass both individual files out to OpenRefine and substitute Anabrus simplex and grasshopper
+  * Text facet Species1
+    * All mormon cricket to Anabrus simplex
+    * All asshopper to grasshopper
+    * All Melanopus to Melanoplus sanguinipes or Melanoplus
+    * "% dead" to Anabrus simplex
+  * Text facet Species2
+    * All Species2 were NA
+  * Text facet Species2
+    * All Species3 were NA
+  * Filter Species1 == NA and Facet Notes
+    * Anything with anab, Species1 to Anabrus simplex
+    * Anything with grassh, Species1 to grasshopper
+  * This gets us 1060 Anabrus simplex, 325 grasshopper, and 545 NA plus 7 other categories
+* Export, fix with OpenRefine, and read back in here
+* Save for SurveyReport090806 but only change GH to grasshopper
+
+```{r import2006}
+X2006MC_GH_survey <- read_excel("NDA MCGH Surveys/2006/2006MC_GH survey.xlsx")
+names(X2006MC_GH_survey)
+which(X2006MC_GH_survey$longitude == 0)
+which(X2006MC_GH_survey$latitude == 0)
+X2006MC_GH_survey = X2006MC_GH_survey[X2006MC_GH_survey$longitude != 0 & X2006MC_GH_survey$latitude != 0,]
+
+which(X2006MC_GH_survey$longitude > 0) # 11
+X2006MC_GH_survey$longitude[which(X2006MC_GH_survey$longitude > 0)]
+X2006MC_GH_survey$longitude[which(X2006MC_GH_survey$longitude > 0)] = 
+  X2006MC_GH_survey$longitude[which(X2006MC_GH_survey$longitude > 0)] * -1
+which(X2006MC_GH_survey$latitude < 0) # none
+
+X2006MC_GH_survey$DateTime = X2006MC_GH_survey$Date
+X2006MC_GH_survey$Date = as.Date(X2006MC_GH_survey$DateTime)
+
+# We end up with 1944 entries
+unique(X2006MC_GH_survey$Species1)
+
+# Export to fix many issues with OpenRefine
+X2006MC_GH_survey_original = X2006MC_GH_survey
+# Only run if you are starting over
+# write.csv(X2006MC_GH_survey, "X2006MC_GH_survey.csv", row.names = F)
+X2006MC_GH_survey = read.csv("NDA MCGH Surveys/2006/X2006MC_GH_survey-csv.csv",
+                             stringsAsFactors = F)
+table(X2006MC_GH_survey$Species1, useNA = "ifany")
+X2006MC_GH_survey$DateTime = as.POSIXct(X2006MC_GH_survey$DateTime)
+X2006MC_GH_survey$Date = as.Date(X2006MC_GH_survey$Date)
+
+X2006MC_GH_survey_dups = X2006MC_GH_survey %>%
+  group_by(latitude, longitude, Date) %>%
+  filter(n()>1) %>%
+  arrange(latitude, Date) # This returns 175 duplicated rows
+
+SurveyReport090806 <- read_excel("NDA MCGH Surveys/2006/SurveyReport090806.xls")
+names(SurveyReport090806)
+
+which(SurveyReport090806$longitude == 0) # all fine
+which(SurveyReport090806$latitude == 0)
+which(SurveyReport090806$longitude > 0)
+which(SurveyReport090806$latitude < 0)
+# We end up with 3500 entries
+
+SurveyReport090806$DateTime = SurveyReport090806$Date
+SurveyReport090806$Date = as.Date(SurveyReport090806$DateTime)
+
+# Export to fix many issues with OpenRefine
+SurveyReport090806_original = SurveyReport090806
+# Only run if you are starting over
+# write.csv(SurveyReport090806, "SurveyReport090806.csv", row.names = F)
+SurveyReport090806 = read.csv("NDA MCGH Surveys/2006/SurveyReport090806-csv.csv",
+                              stringsAsFactors = F)
+SurveyReport090806$DateTime = as.POSIXct(SurveyReport090806$DateTime)
+SurveyReport090806$Date = as.Date(SurveyReport090806$Date)
+
+```
+
+#### 2007
+
+It looks like two of these files are the same, one being reformated in federal format, so I did not import 07FedReport110107.xls
+
+Crickets2007 and X2007MC_GH_survey seem to have the same names.
+
+```{r import2007}
+X2007MC_GH_survey <- read_excel("NDA MCGH Surveys/2007/2007MC_GH survey.xlsx")
+names(X2007MC_GH_survey)
+X2007MC_GH_survey$DateTime = X2007MC_GH_survey$Date
+X2007MC_GH_survey$Date = as.Date(X2007MC_GH_survey$DateTime)
+which(X2007MC_GH_survey$longitude == 0) # All fine
+which(X2007MC_GH_survey$longitude > 0)
+which(X2007MC_GH_survey$latitude < 0)
+
+Crickets2007 <- read_excel("NDA MCGH Surveys/2007/Crickets.xls")
+names(Crickets2007)
+Crickets2007$DateTime = Crickets2007$Date
+Crickets2007$Date = as.Date(Crickets2007$DateTime)
+which(Crickets2007$longitude == 0)
+Crickets2007 = Crickets2007[Crickets2007$longitude != 0,]
+which(Crickets2007$longitude > 0) # Fine
+```
+
+#### 2008
+
+First two below have same names and have row counts off by 2.
+
+NDOA_Report_050108.xls looks like a reformatted federal report, but only has 471 lines instead of 2800 or so.
+
+```{r import2008}
+library(readxl)
+X2008_MormonCrickets_survey <- read_excel("NDA MCGH Surveys/2008/2008 MormonCrickets survey.xlsx")
+names(X2008_MormonCrickets_survey)
+which(X2008_MormonCrickets_survey$Longitude == 0) # All fine
+which(X2008_MormonCrickets_survey$Longitude > 0)
+
+range(na.omit(X2008_MormonCrickets_survey$Longitude))
+range(na.omit(X2008_MormonCrickets_survey$Latitude))
+X2008_MormonCrickets_survey = X2008_MormonCrickets_survey[X2008_MormonCrickets_survey$Latitude < 43,]
+
+
+MC_Master_Final2008 <- read_excel("NDA MCGH Surveys/2008/MC_Master_Final.xls")
+names(MC_Master_Final2008)
+which(MC_Master_Final2008$Longitude == 0) # All fine
+which(MC_Master_Final2008$Longitude > 0)
+range(na.omit(MC_Master_Final2008$Longitude)) # OK
+range(na.omit(MC_Master_Final2008$Latitude))
+table(round(MC_Master_Final2008$Latitude))
+# Three points are way outside NV
+MC_Master_Final2008 = MC_Master_Final2008[MC_Master_Final2008$Latitude < 43,]
+
+NDOA_Report_050108 <- read_excel("NDA MCGH Surveys/2008/NDOA_Report_050108.xls", 
+     range = "A1:S471")
+names(NDOA_Report_050108)
+```
+
+
+### Import 2009-2019
+
+From 2010-2016, files seem to have same columns.  2017-2018 seem the same. 2019 has extra columns.
+
+In 2017-2019, SurveyDate is empty and there is a SurveyDate1 variable. I assigned a POSIXct version of SurveyDate1 to SurveyDate.
+
+In 2018, two date formats were used in Survey_Date1, with January dates.  I threw these out.
+
+```{r import_2009_19}
+X2009_MormonCrickets_survey <- read_excel("NDA MCGH Surveys/2009 MormonCrickets survey.xlsx")
+names(X2009_MormonCrickets_survey)
+
+X2010_MCGH_Survey <- read_excel("NDA MCGH Surveys/2010 MCGH_Survey.xlsx")
+names(X2010_MCGH_Survey)
+
+X2011_MCGH_Survey <- read_excel("NDA MCGH Surveys/2011 MCGH Survey.xlsx")
+names(X2011_MCGH_Survey)
+
+X2012_MCGH_Survey <- read_excel("NDA MCGH Surveys/2012 MCGH Survey.xlsx")
+names(X2012_MCGH_Survey)
+
+X2013_MCGH_Survey <- read_excel("NDA MCGH Surveys/2013 MCGH Survey.xlsx")
+names(X2013_MCGH_Survey)
+
+X2014_MCGH_Survey <- read_excel("NDA MCGH Surveys/2014 MCGH Survey.xlsx")
+names(X2014_MCGH_Survey)
+
+X2015_MCGH_Survey <- read_excel("NDA MCGH Surveys/2015 MCGH Survey.xlsx")
+names(X2015_MCGH_Survey)
+
+X2016_MCGH_Survey <- read_excel("NDA MCGH Surveys/2016 MCGH Survey.xlsx")
+names(X2016_MCGH_Survey)
+X2016_MCGH_Survey$SurveyDate = as.POSIXct(X2016_MCGH_Survey$SurveyDate)
+
+X2017_MCGH_Survey <- read_excel("NDA MCGH Surveys/2017 MCGH Survey.xlsx")
+names(X2017_MCGH_Survey)
+X2017_MCGH_Survey$SurveyDate = as.POSIXct(X2017_MCGH_Survey$SurveyDate1)
+
+X2018_MCGH_Survey <- read_excel("NDA MCGH Surveys/2018 MCGH Survey.xlsx")
+names(X2018_MCGH_Survey)
+X2018_MCGH_Survey = X2018_MCGH_Survey[-(10:13),]
+X2018_MCGH_Survey$SurveyDate = as.POSIXct(X2018_MCGH_Survey$SurveyDate1)
+
+X2019_MCGH_Survey <- read_excel("NDA MCGH Surveys/2019 MCGH Survey.xlsx")
+names(X2019_MCGH_Survey)
+X2019_MCGH_Survey$SurveyDate = as.POSIXct(X2019_MCGH_Survey$SurveyDate1)
+
+```
+
+## Overlap removal
+
+```{r overlap2002}
+library(dplyr)
+
+intersect_2002_47_treated = inner_join(df_2002_47,df_2002_treated,by=c("Date1" = "Date","Longitude","Latitude"))
+intersect_2002_47_treated2 = semi_join(df_2002_47,df_2002_treated,by=c("Date1" = "Date","Longitude","Latitude"))
+duplicated_2002_47 = df_2002_47[duplicated(df_2002_47),] #0
+duplicated_2002_treated = df_2002_treated[duplicated(df_2002_treated),] #0
+unique_2002_treated_47 = anti_join(df_2002_treated,df_2002_47,by=c("Date" = "Date1","Longitude","Latitude"))
+# Need to rename columns first then merge
+names(unique_2002_treated_47)[c(1:3,6,9,10)] = c("UserName", "Date1", "StopId", "PersqYd", "PoundsUsed","AcresTreated")
+unique_2002_treated_47$Species1 = "A. simplex"
+unique_2002_treated_47$PercentSp1 = 100
+
+range(na.omit(df_2002_47$Longitude))
+range(na.omit(df_2002_47$Latitude))
+range(na.omit(unique_2002_treated_47$Longitude))
+range(na.omit(unique_2002_treated_47$Latitude))
+
+df_2002_all = bind_rows(list(df_2002_47,unique_2002_treated_47[-2,]))
+```
+
+```{r overlap2003}
+library(dplyr)
+
+intersect_2003_surveyed_a13 = inner_join(df_2003_surveyed,df_2003_a13,by=c("Date" = "Date1","Longitude","Latitude"))
+intersect_2003_surveyed_treated = inner_join(df_2003_surveyed,df_2003_treated,by=c("Date","Longitude","Latitude"))
+intersect_2003_treated_surveyed = inner_join(df_2003_treated,df_2003_surveyed,by=c("Date","Longitude","Latitude"))
+intersect_2003_surveyed_treated2 = semi_join(df_2003_surveyed,df_2003_treated,by=c("Date","Longitude","Latitude"))
+intersect_2003_treated_surveyed2 = semi_join(df_2003_treated,df_2003_surveyed,by=c("Date","Longitude","Latitude"))
+duplicated_2003_surveyed = df_2003_surveyed[duplicated(df_2003_surveyed),] #11
+duplicated_2003_a13 = df_2003_a13[duplicated(df_2003_a13),] #2, 1 NA
+duplicated_2003_treated = df_2003_treated[duplicated(df_2003_treated),] #4
+duplicated_2003_47 = df_2003_47[duplicated(df_2003_47),] #0
+# Remove some duplicates
+df_2003_treated = distinct(df_2003_treated,.keep_all = T)
+unique_2003_treated_47 = anti_join(df_2003_treated,df_2003_47,by=c("Date" = "Date1","Longitude","Latitude"))
+names(df_2003_47)
+names(unique_2003_treated_47)[c(2:4,7,10,11)]  = c("UserName", "Date1", "StopId", "PersqYd", "PoundsUsed","AcresTreated")
+unique_2003_treated_47$Species1 = "A. simplex"
+unique_2003_treated_47$PercentSp1 = 100
+
+df_2003_all = bind_rows(list(df_2003_47[which(!is.na(df_2003_47$Latitude)),],
+                             unique_2003_treated_47[which(!is.na(unique_2003_treated_47$Latitude)),]))
+
+unique_2003_a13_all = anti_join(df_2003_a13,df_2003_all,by=c("Date1","Longitude","Latitude"))
+# All with no GPS data, so no need to bind in
+
+unique_2003_surveyed_all = anti_join(df_2003_surveyed,df_2003_all,by=c("Date" = "Date1", "Longitude", "Latitude"))
+names(unique_2003_surveyed_all)[c(3:5,8)]= c("UserName", "Date1", "StopId", "PersqYd")
+unique_2003_surveyed_all$Species1 = "A. simplex"
+unique_2003_surveyed_all$PercentSp1 = 100
+
+range(na.omit(df_2003_47$Longitude))
+range(na.omit(df_2003_47$Latitude))
+range(na.omit(unique_2003_treated_47$Longitude))
+range(na.omit(unique_2003_treated_47$Latitude))
+range(na.omit(unique_2003_surveyed_all$Longitude))
+range(na.omit(unique_2003_surveyed_all$Latitude))
+
+df_2003_all = bind_rows(list(df_2003_47[which(!is.na(df_2003_47$Latitude)),],
+                             unique_2003_treated_47[which(!is.na(unique_2003_treated_47$Latitude)),],
+                             unique_2003_surveyed_all[which(!is.na(unique_2003_surveyed_all$Latitude)),]))
+```
+
+```{r overlap2004}
+library(dplyr)
+names(Fixed_crickets_04_treated)[c(4,5)] = c("Latitude","Longitude")
+names(NVdata04_N_treated)[c(2,5,8,9)] = c("StopId", "PersqYd", "PoundsUsed", "AcresTreated")
+
+Fixed_crickets_04_treated$Date = as.Date(Fixed_crickets_04_treated$TimeStamp)
+NVdata04_N_treated$Date = as.Date(NVdata04_N_treated$Date)
+
+unique_2004Fixed_NVdata_treated = anti_join(NVdata04_N_treated,
+                                            Fixed_crickets_04_treated,)
+df_2004_all = bind_rows(list(Fixed_crickets_04_treated[which(!is.na(Fixed_crickets_04_treated$Latitude)),],
+                             unique_2004Fixed_NVdata_treated [which(!is.na(unique_2004Fixed_NVdata_treated$Latitude)),]))
+
+NVdata04_N_survey$Date = as.Date(NVdata04_N_survey$Date)
+unique_2004NVdata_surveyed_all = anti_join(NVdata04_N_survey,df_2004_all, 
+                                           by=c("Date","Longitude","Latitude"))
+
+df_2004_all = bind_rows(list(Fixed_crickets_04_treated[which(!is.na(Fixed_crickets_04_treated$Latitude)),],
+                             unique_2004Fixed_NVdata_treated [which(!is.na(unique_2004Fixed_NVdata_treated $Latitude)),],
+                             unique_2004NVdata_surveyed_all[which(!is.na(unique_2004NVdata_surveyed_all$Latitude)),]))
+
+names(fin_mc04) = c("Date", "StopId", "Latitude", "Longitude", "PersqYd")
+
+unique_2004fin_all = anti_join(fin_mc04,df_2004_all, 
+                                           by=c("Date","Longitude","Latitude"))
+
+range(na.omit(Fixed_crickets_04_treated$Longitude))
+range(na.omit(Fixed_crickets_04_treated$Latitude))
+range(na.omit(unique_2004Fixed_NVdata_treated$Longitude))
+range(na.omit(unique_2004Fixed_NVdata_treated$Latitude))
+
+df_2004_all = bind_rows(list(Fixed_crickets_04_treated[which(!is.na(Fixed_crickets_04_treated$Latitude)),],
+                             unique_2004Fixed_NVdata_treated [which(!is.na(unique_2004Fixed_NVdata_treated$Latitude)),],
+                             unique_2004NVdata_surveyed_all[which(!is.na(unique_2004NVdata_surveyed_all$Latitude)),],
+                             unique_2004fin_all [which(!is.na(unique_2004fin_all$Latitude)),]))
+
+# Check if there are cases where there is both a PersqYd and MC Density entry
+which(!is.na(df_2004_all$PersqYd) & !is.na(df_2004_all$`MC Density`))
+# There are none, so combine
+names(df_2004_all)[6] = "PersqYd_original"
+df_2004_all = df_2004_all %>%
+  mutate(PersqYd = coalesce(PersqYd_original,`MC Density`))
+```
+
+```{r overlap2005}
+names(Survey_Report_form_090205)[c(2,3,5:7,11,12)] = 
+  c("surveyor", "Date", 
+    "latitude", "longitude", 
+    "PerSqYard", "county", "Notes")
+
+which(is.na(Survey_Report_form_090205$latitude)) # no na
+dim(Survey_Report_form_090205)
+
+unique_2005_X_MC_GH_Survey = anti_join(X2005MC_GH_survey, 
+                                       Survey_Report_form_090205,
+                                       by=c("Date","longitude","latitude"))
+unique_2005_X_MC_GH_Survey2 = anti_join(X2005MC_GH_survey_2, 
+                                       Survey_Report_form_090205,
+                                       by=c("Date","longitude","latitude"))
+dim(unique_2005_X_MC_GH_Survey)
+which(is.na(unique_2005_X_MC_GH_Survey$latitude)) # no na
+
+range(na.omit(Survey_Report_form_090205$longitude))
+range(na.omit(Survey_Report_form_090205$latitude))
+range(na.omit(unique_2005_X_MC_GH_Survey$longitude))
+range(na.omit(unique_2005_X_MC_GH_Survey$latitude))
+range(na.omit(unique_2005_X_MC_GH_Survey2$longitude))
+range(na.omit(unique_2005_X_MC_GH_Survey2$latitude))
+
+# Two datasets for 2005, with and without Species1 == NA and no mention of crickets in the notes
+df_2005_all = bind_rows(list(Survey_Report_form_090205,
+                             unique_2005_X_MC_GH_Survey 
+                            ))
+df_2005_all_2 = bind_rows(list(Survey_Report_form_090205,
+                             unique_2005_X_MC_GH_Survey2 
+                            ))
+```
+
+```{r overlap2006}
+# Not needed since we did it before reading it out and in again
+# Would need if starting over
+# names(SurveyReport090806)[c(2,3,5:7,12,13)] = 
+#   c("surveyor", "Date", 
+#     "latitude", "longitude", 
+#     "PerSqYard", "county", "Notes")
+
+which(is.na(SurveyReport090806$latitude)) # no na
+dim(SurveyReport090806)
+names(SurveyReport090806)
+SurveyReport090806$Species1 = "Anabrus simplex"
+
+unique_2006_X_MC_GH_Survey = anti_join(X2006MC_GH_survey, 
+                                       SurveyReport090806,
+                                       by=c("Date","longitude","latitude"))
+dim(unique_2006_X_MC_GH_Survey)
+which(is.na(unique_2006_X_MC_GH_Survey$latitude)) # no na
+
+range(na.omit(SurveyReport090806$longitude))
+range(na.omit(SurveyReport090806$latitude))
+range(na.omit(unique_2006_X_MC_GH_Survey$longitude))
+range(na.omit(unique_2006_X_MC_GH_Survey$latitude))
+
+# returns 1872 rows
+df_2006_all = bind_rows(list(SurveyReport090806,
+                             unique_2006_X_MC_GH_Survey))
+```
+
+```{r overlap2007}
+names(Crickets2007)[c(2,3,5:7,12,13)] = 
+  c("surveyor", "Date", 
+    "latitude", "longitude", 
+    "PerSqYard", "county", "Notes")
+names(X2007MC_GH_survey)
+names(Crickets2007)
+
+unique_2007_X_MC_GH_Survey = anti_join(X2007MC_GH_survey, 
+                                       Crickets2007,
+                                       by=c("Date","longitude","latitude"))
+
+range(na.omit(Crickets2007$longitude))
+range(na.omit(Crickets2007$latitude))
+table(round(Crickets2007$longitude,0))
+table(round(Crickets2007$latitude,0))
+#Fixes
+Crickets2007$longitude[Crickets2007$longitude > -114] =
+  Crickets2007$longitude[Crickets2007$longitude > -114] -100
+Crickets2007$longitude[round(Crickets2007$longitude) == -1116] =
+  Crickets2007$longitude[round(Crickets2007$longitude) == -1116] + 1000
+Crickets2007$longitude[round(Crickets2007$longitude) < -1e+09] =
+  Crickets2007$longitude[round(Crickets2007$longitude) < -1e+09] / 1e+07
+Crickets2007$longitude[round(Crickets2007$longitude) < -1e+07] =
+  Crickets2007$longitude[round(Crickets2007$longitude) < -1e+07] / 1e+06
+Crickets2007$latitude[Crickets2007$latitude > 50] =
+  Crickets2007$latitude[Crickets2007$latitude > 50] / 1e+06
+
+range(na.omit(X2007MC_GH_survey$longitude))
+range(na.omit(X2007MC_GH_survey$latitude))
+
+df_2007_all = bind_rows(list(Crickets2007,
+                             X2007MC_GH_survey))
+```
+
+```{r overlap2008}
+names(X2008_MormonCrickets_survey)
+names(MC_Master_Final2008)
+unique_2008_X_MC_GH_Survey = anti_join(X2008_MormonCrickets_survey, 
+                                       MC_Master_Final2008,
+                                       by=c("Date","Longitude","Latitude"))
+# All columns are the same
+
+df_2008_all = bind_rows(list(MC_Master_Final2008,
+                             X2008_MormonCrickets_survey))
+df_2008_all$Date = as.Date(df_2008_all$Date)
+
+names(NDOA_Report_050108)[c(1,2,7,8,10,13,14)] = 
+  c("RecordName", "Date", "Latitude", "Longitude", 
+    "Species", "PerSqYard", "Notes")
+NDOA_Report_050108$Date = as.Date(NDOA_Report_050108$Date...16)
+
+unique_2008_NDOA_all = anti_join(NDOA_Report_050108, 
+                                       df_2008_all,
+                                       by=c("Date","Longitude","Latitude"))
+# These were all grasshoppers so were not joined
+```
+
+Since from 2009-2019 there is one file for each year, I did not do overlap removal 
+
+
+## Create consistantly formatted file for each year
+
+See https://github.com/plorch/MormonCricket/projects/1
+
+## Get slope aspect and elevation data
+
+See https://github.com/plorch/MormonCricket/projects/1
+
+### Yearly coordinates with densities and Pres/Abs
+
+* 2005 was a little messy
+  * there are two versions, with and without the Species1 == NA and no mention of crickets in Notes
+* 2006 was a big mess and we ended up with only 134 points until we went back and fixed tons of misspellings
+
+#### 2002
+
+```{r format2002}
+library(dplyr)
+# To get rid of wierd warnings:
+# !diagnostics off
+
+# Find coords, density, filter to MC only
+names(df_2002_all)
+table(df_2002_all$Species1)
+table(df_2002_all$Species2[!grepl("simplex", df_2002_all$Species1), drop = F])
+table(df_2002_all$Species3[!grepl("simplex", df_2002_all$Species1), drop = F])
+# we're missing 1
+df_2002_all[!grepl("simplex", df_2002_all$Species1) & 
+              grepl("simplex", df_2002_all$Species2),
+            c("Species1","Species2","Species3")]
+df_2002_all[!grepl("simplex", df_2002_all$Species1) & 
+              grepl("simplex", df_2002_all$Species2),
+            c("Species1")] = "A. simplex (MC)"
+unique(df_2002_all$`GH Density`) # These are all NA so ignore this field
+range(!is.na(df_2002_all$Longitude))
+plot(df_2002_all$Latitude)
+which(df_2002_all$Latitude == 0)
+
+# This rule finds cases where Species1 is NA and StopID does not contain GH
+#  These removes what likely were unknown grasshopper records
+df_2002_all_Notes = df_2002_all %>%
+  select(Species1,StopId,Notes) %>%
+  filter(is.na(Species1) & !grepl("GH", StopId))
+df_2002_all %>%
+  select(Species1,StopId) %>%
+  filter(is.na(Species1) & grepl("GH", StopId))
+
+df_2002_MC_wCoords = df_2002_all %>%
+  filter(grepl("simplex", Species1) & #|
+# being conservative and leaving this out
+  # (is.na(Species1) & !grepl("GH", StopId)) &
+           (!is.na(Longitude) & !is.na(Latitude))) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+        Date = Date1, PersqYd) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2003
+
+```{r format2003}
+library(dplyr)
+
+which(df_2003_all$Longitude == 0) # None are 0
+which(df_2003_all$Latitude == 0)
+table(df_2003_all$Species1, useNA = "ifany")
+
+df_2003_MC_wCoords = df_2003_all %>%
+  filter(grepl("simplex", Species1) & #|
+           # (is.na(Species1) & !grepl("GH", StopId)) &
+           (!is.na(Longitude) & !is.na(Latitude))) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date = Date1, PersqYd) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+df_2003_MC_NA_wCoords_Anab = df_2003_MC_NA_wCoords
+df_2003_MC_NA_wCoords_Anab$Species = "Anabrus simplex"
+df_2003_MC_NA_wCoords_Anab$Date = as.Date(df_2003_MC_NA_wCoords_Anab$Date)
+write.csv(df_2003_MC_NA_wCoords_Anab,"df_2003_MC_NA_wCoords_Anab.csv",row.names = F)
+```
+
+#### 2004
+
+```{r format2004}
+# No Species names this year
+names(df_2004_all)
+unique(df_2004_all$`GH Density`) # These are NOT all NA so eliminate !is.na
+df_2004_all[df_2004_all$`GH Density` > 0,]
+which(df_2004_all$Longitude == 0) # All good
+which(df_2004_all$Latitude == 0)
+
+df_2004_MC_wCoords = df_2004_all %>%
+  filter(is.na(`GH Density`) & 
+           # !grepl("GH", StopId) &
+           (!is.na(Longitude) & !is.na(Latitude))) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2005
+
+```{r format2005}
+names(df_2005_all)
+unique(df_2005_all$GHDENSITY)
+which(df_2005_all$longitude == 0)
+which(df_2005_all$latitude == 0)
+# Find and fix species name problems
+table(df_2005_all$Species1)
+
+# Removed filter because we have removed all non
+df_2005_MC_wCoords = df_2005_all %>%
+  # filter(grepl("simplex", Species1) &
+  #          # (is.na(Species1) & !grepl("GH", STOPNUM)) &
+  filter(!is.na(longitude) & !is.na(latitude)) %>%
+  select(longitude, latitude, 
+         Date, PersqYd = PerSqYard) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+df_2005_MC_wCoords_2 = df_2005_all_2 %>%
+  # filter(grepl("simplex", Species1) &
+  #          # (is.na(Species1) & !grepl("GH", STOPNUM)) &
+  filter(!is.na(longitude) & !is.na(latitude)) %>%
+  select(longitude, latitude, 
+         Date, PersqYd = PerSqYard) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2006
+
+```{r format2006}
+names(df_2006_all)
+# There were 80 different entries for Species1 here and tons of NA
+#  Went back and fixed these with Google refine
+unique(df_2006_all$Species1)
+table(df_2006_all$Species1, useNA = "ifany")
+
+which(df_2006_all$longitude == 0) # All fine
+df_2006_all$longitude[which(df_2006_all$longitude > 0)] # All fine
+which(df_2006_all$latitude < 0) # All fine
+which(grepl("GH", df_2006_all$STOPNUM)) # Now none
+which(grepl("GRASSH", df_2006_all$Notes)) # Tons
+# Noticed tons of duplicates with same Lat, Lon and date (but not time)
+#   This shows the duplicated rows, 133
+df_2006_all_dups = df_2006_all %>%
+  group_by(latitude, longitude, Date) %>%
+  filter(n()>1) %>%
+  arrange(latitude, Date, STOPNUM)
+
+# 51
+df_2006_all_trips = df_2006_all %>%
+  group_by(latitude,longitude,Date) %>%
+  filter(n()>2) %>%
+  arrange(latitude, Date, STOPNUM)
+
+df_2006_all_nodups = df_2006_all %>%
+  arrange(latitude, Date, STOPNUM) %>%
+  distinct(latitude, longitude, Date, .keep_all = T)
+
+df_2006_MC_wCoords = df_2006_all_nodups %>%
+  filter(grepl("simplex", Species1) &
+           !is.na(longitude) & !is.na(latitude)) %>% 
+  select(longitude, latitude, 
+         Date, PersqYd = PerSqYard) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2007
+
+```{r format2007}
+names(df_2007_all)
+which(df_2007_all$longitude == 0) # All fine
+which(df_2007_all$latitude == 0)
+table(df_2007_all$Species1, useNA = "ifany")
+
+df_2007_MC_wCoords = df_2007_all %>%
+  filter(grepl("simplex", Species1) &
+           !is.na(longitude) & !is.na(latitude)) %>% 
+  select(longitude, latitude, 
+         Date, PersqYd = PerSqYard) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0),
+         Date = as.Date(Date))
+```
+
+#### 2008
+
+```{r format2008}
+names(df_2008_all)
+which(df_2008_all$Longitude == 0) # all fine
+which(df_2008_all$Longitude > 0)
+which(df_2008_all$Latitude == 0)
+table(df_2008_all$Species, useNA = "ifany") # All Anabrus simplex
+
+df_2008_MC_wCoords = df_2008_all %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = PerSqYard) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2009
+
+```{r format2009}
+names(X2009_MormonCrickets_survey)
+which(X2009_MormonCrickets_survey$Longitude == 0) # all fine
+which(X2009_MormonCrickets_survey$Longitude > 0) 
+which(X2009_MormonCrickets_survey$Latitude == 0)
+table(X2009_MormonCrickets_survey$Species, useNA = "ifany") # All Anabrus simplex
+range(X2009_MormonCrickets_survey$Longitude)
+range(X2009_MormonCrickets_survey$Latitude)
+
+df_2009_MC_wCoords = X2009_MormonCrickets_survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = PerSqYard) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2010
+
+```{r format2010}
+names(X2010_MCGH_Survey)
+which(X2010_MCGH_Survey$Longitude == 0) # all fine
+which(X2010_MCGH_Survey$Longitude > 0) 
+which(X2010_MCGH_Survey$Latitude == 0)
+table(X2010_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2010_MCGH_Survey$Date = as.Date(X2010_MCGH_Survey$SurveyDate)
+range(X2010_MCGH_Survey$Longitude)
+range(X2010_MCGH_Survey$Latitude)
+
+df_2010_MC_wCoords = X2010_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2011
+
+```{r format2011}
+names(X2011_MCGH_Survey)
+which(X2011_MCGH_Survey$Longitude == 0) # all fine
+which(X2011_MCGH_Survey$Longitude > 0) 
+which(X2011_MCGH_Survey$Latitude == 0)
+table(X2011_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2011_MCGH_Survey$Date = as.Date(X2011_MCGH_Survey$SurveyDate)
+range(X2011_MCGH_Survey$Longitude)
+range(X2011_MCGH_Survey$Latitude)
+
+df_2011_MC_wCoords = X2011_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2012
+
+```{r format2012}
+names(X2012_MCGH_Survey)
+which(X2012_MCGH_Survey$Longitude == 0) # all fine
+which(X2012_MCGH_Survey$Longitude > 0) 
+which(X2012_MCGH_Survey$Latitude == 0)
+X2012_MCGH_Survey = X2012_MCGH_Survey[X2012_MCGH_Survey$Longitude !=0,]
+table(X2012_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2012_MCGH_Survey$Date = as.Date(X2012_MCGH_Survey$SurveyDate)
+range(X2012_MCGH_Survey$Longitude)
+range(X2012_MCGH_Survey$Latitude)
+
+df_2012_MC_wCoords = X2012_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2013
+
+```{r format2013}
+names(X2013_MCGH_Survey)
+which(X2013_MCGH_Survey$Longitude == 0) # all fine
+which(X2013_MCGH_Survey$Longitude > 0) 
+which(X2013_MCGH_Survey$Latitude == 0)
+table(X2013_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2013_MCGH_Survey$Date = as.Date(X2013_MCGH_Survey$SurveyDate)
+range(X2013_MCGH_Survey$Longitude)
+range(X2013_MCGH_Survey$Latitude)
+
+df_2013_MC_wCoords = X2013_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2014
+
+```{r format2014}
+names(X2014_MCGH_Survey)
+which(X2014_MCGH_Survey$Longitude == 0) # all fine
+which(X2014_MCGH_Survey$Longitude > 0) 
+which(X2014_MCGH_Survey$Latitude == 0)
+which(X2014_MCGH_Survey$Latitude < 0)
+X2014_MCGH_Survey = X2014_MCGH_Survey[X2014_MCGH_Survey$Longitude !=0,]
+table(X2014_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2014_MCGH_Survey$Date = as.Date(X2014_MCGH_Survey$SurveyDate)
+range(X2014_MCGH_Survey$Longitude)
+range(X2014_MCGH_Survey$Latitude)
+
+df_2014_MC_wCoords = X2014_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2015
+
+```{r format2015}
+names(X2015_MCGH_Survey)
+which(X2015_MCGH_Survey$Longitude == 0) # all fine
+which(X2015_MCGH_Survey$Longitude > 0) 
+which(X2015_MCGH_Survey$Latitude == 0)
+which(X2015_MCGH_Survey$Latitude < 0)
+table(X2015_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2015_MCGH_Survey$Date = as.Date(X2015_MCGH_Survey$SurveyDate)
+range(X2015_MCGH_Survey$Longitude)
+range(X2015_MCGH_Survey$Latitude)
+
+df_2015_MC_wCoords = X2015_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2016
+
+```{r format2016}
+names(X2016_MCGH_Survey)
+which(X2016_MCGH_Survey$Longitude == 0) # all fine
+which(X2016_MCGH_Survey$Longitude > 0) 
+which(X2016_MCGH_Survey$Latitude == 0)
+which(X2016_MCGH_Survey$Latitude < 0)
+table(X2016_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2016_MCGH_Survey$Date = as.Date(X2016_MCGH_Survey$SurveyDate)
+range(X2016_MCGH_Survey$Longitude)
+range(X2016_MCGH_Survey$Latitude)
+# One of these is way outside NV
+X2016_MCGH_Survey = 
+  X2016_MCGH_Survey[X2016_MCGH_Survey$Latitude >= 35,]
+
+df_2016_MC_wCoords = X2016_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2017
+
+```{r format2017}
+names(X2017_MCGH_Survey)
+which(X2017_MCGH_Survey$Longitude == 0) # all fine
+which(X2017_MCGH_Survey$Longitude > 0) 
+which(X2017_MCGH_Survey$Latitude == 0)
+which(X2017_MCGH_Survey$Latitude < 0)
+table(X2017_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2017_MCGH_Survey$Date = as.Date(X2017_MCGH_Survey$SurveyDate)
+range(X2017_MCGH_Survey$Longitude)
+range(X2017_MCGH_Survey$Latitude)
+
+df_2017_MC_wCoords = X2017_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2018
+
+```{r format2018}
+names(X2018_MCGH_Survey)
+which(X2018_MCGH_Survey$Longitude == 0) # all fine
+which(X2018_MCGH_Survey$Longitude > 0) 
+which(X2018_MCGH_Survey$Latitude == 0)
+which(X2018_MCGH_Survey$Latitude < 0)
+table(X2018_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2018_MCGH_Survey$Date = as.Date(X2018_MCGH_Survey$SurveyDate)
+range(X2018_MCGH_Survey$Longitude)
+range(X2018_MCGH_Survey$Latitude)
+
+df_2018_MC_wCoords = X2018_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+#### 2019
+
+```{r format2019}
+names(X2019_MCGH_Survey)
+which(X2019_MCGH_Survey$Longitude == 0) # all fine
+which(X2019_MCGH_Survey$Longitude > 0) 
+which(X2019_MCGH_Survey$Latitude == 0)
+which(X2019_MCGH_Survey$Latitude < 0)
+table(X2019_MCGH_Survey$TargetPest, useNA = "ifany") # All Anabrus simplex
+X2019_MCGH_Survey$Date = as.Date(X2019_MCGH_Survey$SurveyDate)
+range(X2019_MCGH_Survey$Longitude)
+range(X2019_MCGH_Survey$Latitude)
+
+df_2019_MC_wCoords = X2019_MCGH_Survey %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  select(longitude = Longitude, latitude = Latitude, 
+         Date, PersqYd = Count) %>%
+  mutate(PresAbs = ifelse(PersqYd > 0,1,0))
+```
+
+### Make Giant list
+
+```{r makegiantlist}
+mc_by_year_list = list(df_2002_MC_wCoords, df_2003_MC_wCoords, 
+                       df_2004_MC_wCoords, df_2005_MC_wCoords,
+                       df_2006_MC_wCoords, df_2007_MC_wCoords,
+                       df_2008_MC_wCoords, df_2009_MC_wCoords,
+                       df_2010_MC_wCoords, df_2011_MC_wCoords,
+                       df_2012_MC_wCoords, df_2013_MC_wCoords,
+                       df_2014_MC_wCoords, df_2015_MC_wCoords,
+                       df_2016_MC_wCoords, df_2017_MC_wCoords,
+                       df_2018_MC_wCoords, df_2019_MC_wCoords)
+identical(dput(names(mc_by_year_list[[1]])), 
+          dput(names(mc_by_year_list[[2]])))
+```
+
+## Make all df to sf
+
+```{r tosf}
+library(tidyverse)
+library(sf)
+sf_mc_by_year_list = mc_by_year_list %>%
+  map(function(x) st_as_sf(x, 
+      coords = c("longitude","latitude"),
+      crs = 4326,
+      na.fail = F))
+```
+
+## Get convex hull for each set of points
+
+```{r convexhull}
+library(tidyverse)
+library(sf)
+
+# Testing
+# tch = st_convex_hull(st_union(sf_mc_by_year_list[[1]]))
+# plot(sf_mc_by_year_list[[1]])
+# plot(tch, add=T)
+
+ch_mc_by_year_list = sf_mc_by_year_list %>%
+  map(function(x) st_convex_hull(st_union(x)))
+
+# Make one giant sf object
+mc_all_years = sf_mc_by_year_list %>%
+  bind_rows(sf_mc_by_year_list) %>%
+  mutate(id = row_number())
+# plot(st_coordinates(mc_all_years))
+
+ch_all_years = mc_all_years %>%
+  st_union() %>%
+  st_convex_hull()
+plot(ch_all_years)
+ch_mc_by_year_list %>%
+  map(function(x) plot(x, add = T))
+# The above had some points outside Nevada. Years 2008 and 2016
+# plot(ch_all_years)
+# for(i in c(7,15)){
+#   plot(ch_mc_by_year_list[[i]], add = T)
+# }
+# 2002 + c(7,15) -1
+
+ch_all_years_bbox = st_bbox(ch_all_years)
+abline(v = ch_all_years_bbox[c(1,3)])
+abline(h = ch_all_years_bbox[c(2,4)])
+
+```
+
+
+## Get slope and aspect for grid points
+
+```{r terrain}
+# See code from Mike Kearney
+```
+
+
+## Mapping to figure out which data are useable
+
+Filtered out points without Lat, Long and with invalid values (2 rows with Long > 0 from NV_data2_03treated1)
+
+```{r mapping}
+library(sf)
+library(dplyr)
+library(leaflet)
+library(htmltools)
+
+NV = st_read("/Users/plorch/Documents/COVID-19/UScounties/UScounties.shp", quiet = TRUE) %>% 
+  filter(STATE_NAME == "Nevada") 
+NV_centroids = NV %>%
+    mutate(geometry = st_transform(st_centroid(st_transform(geometry,3734)),4326))
+
+sf_2002_47 = df_2002_47[!is.na(df_2002_47$Longitude),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2002_treated = df_2002_treated[!is.na(df_2002_treated$Longitude),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+
+sf_2003_47 = df_2003_47[!is.na(df_2003_47$Longitude),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2003_surveyed = df_2003_surveyed[!is.na(df_2003_surveyed$Longitude),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2003_treated = df_2003_treated[((!is.na(df_2003_treated$Longitude)) & 
+                                      df_2003_treated$Longitude < 0),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2003_a13 = df_2003_a13[!is.na(df_2003_a13$Longitude),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2004_fin_mc04 = fin_mc04[!is.na(fin_mc04$Longitude),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2004_surveyed = NVdata04_N_survey[!is.na(NVdata04_N_survey$Longitude),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2004_treated = NVdata04_N_treated[((!is.na(NVdata04_N_treated$Longitude)) & 
+                                      NVdata04_N_treated$Longitude < 0),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2004_Fixed_04_treated = Fixed_crickets_04_treated[((!is.na(Fixed_crickets_04_treated$Longitude)) & 
+                                      Fixed_crickets_04_treated$Longitude < 0),] %>%
+    st_as_sf(coords = c("Longitude","Latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2005_surveyed = Survey_Report_form_090205[!is.na(Survey_Report_form_090205$longitude),] %>%
+    st_as_sf(coords = c("longitude","latitude"), 
+             crs = 4326,
+             na.fail = F)
+sf_2005_treated = X2005MC_GH_survey[((!is.na(X2005MC_GH_survey$longitude)) & 
+                                         X2005MC_GH_survey$latitude > 0 & 
+                                         X2005MC_GH_survey$longitude < 0),] %>%
+    st_as_sf(coords = c("longitude","latitude"), 
+             crs = 4326,
+             na.fail = F)
+
+
+# Plot all points on interactive map
+sf_2003_47 %>% 
+    filter(grepl("simplex",Species1)|
+               is.na(Species1)) %>%
+    leaflet() %>% 
+    addTiles() %>%
+    addPolygons(data=NV$geometry,
+                fill = F,
+                weight = 1,
+                color = "black"
+    ) %>%
+    addLabelOnlyMarkers(data = NV_centroids,
+                        label = ~NAME,
+                        labelOptions = labelOptions(permanent = T,
+                                                    direction = 'center',
+                                                    textOnly = TRUE)
+    ) %>%
+  addCircleMarkers(data = sf_2002_47[grepl("simplex",sf_2002_47$Species1)|
+               is.na(sf_2002_47$Species1),],
+    radius = 5,
+    color = "blue",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste(Species1,
+                              "density =",
+                              PersqYd, "on",
+                              as.character(as.Date(TimeStamp)), 
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2002_47 files"
+  ) %>%
+  addCircleMarkers(data = sf_2002_treated,
+    radius = 5,
+    color = "red",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste("MC density =",
+                              `MC Density`, "on",
+                              as.character(as.Date(Date)),
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2002_treated files"
+  ) %>%
+  addCircleMarkers(
+    radius = 5,
+    color = "blue",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste(Species1,
+                              "density =",
+                              PersqYd, "on",
+                              as.character(as.Date(TimeStamp)), 
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2003_47 files"
+  ) %>%
+  addCircleMarkers(data = sf_2003_surveyed,
+    radius = 5,
+    color = "green",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste("MC density =",
+                              `MC Density`, "on",
+                              as.character(as.Date(Date)), 
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2003_surveyed files"
+  ) %>%
+  addCircleMarkers(data = sf_2003_treated,
+    radius = 5,
+    color = "red",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste("MC density =",
+                              `MC Density`, "on",
+                              as.character(as.Date(Date)),
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2003_treated files"
+  ) %>%
+   addCircleMarkers(data = sf_2003_a13,
+    radius = 5,
+    color = "purple",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste(Species1,
+                              "density =",
+                              PersqYd, "on",
+                              as.character(as.Date(Date1)),
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2003_a13 files"
+  ) %>%
+  addCircleMarkers(data = sf_2004_fin_mc04,
+    radius = 5,
+    color = "grey",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste("MC density =",
+                              count, "on",
+                              as.character(as.Date(date)), 
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2004_surveyed_fin_mc04 file"
+  ) %>%
+  addCircleMarkers(data = sf_2004_surveyed,
+    radius = 5,
+    color = "green",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste("MC density =",
+                              `MC Density`, "on",
+                              as.character(as.Date(Date)), 
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2004_surveyed file"
+  ) %>%
+  addCircleMarkers(data = sf_2004_treated,
+    radius = 5,
+    color = "red",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste("MC density =",
+                              `MC Density`, "on",
+                              as.character(as.Date(Date)),
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2004_treated file"
+  ) %>%
+  addCircleMarkers(data = sf_2004_Fixed_04_treated,
+    radius = 5,
+    color = "pink",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste("MC density =",
+                              `PersqYd`, "on",
+                              as.character(as.Date(TimeStamp)),
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2004_Fixed_04_treated file"
+  ) %>%
+  addCircleMarkers(data = sf_2005_surveyed,
+    radius = 5,
+    color = "green",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste("MC density =",
+                              `MCDENSITY`, "on",
+                              as.character(as.Date(DATE)),
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2005_surveyed file"
+  ) %>%
+  addCircleMarkers(data = sf_2005_treated,
+    radius = 5,
+    color = "red",
+    stroke = TRUE,
+    fillOpacity = 0.25,
+    popup = T,
+    label = ~htmlEscape(paste("MC density =",
+                              PerSqYard, "on",
+                              as.character(as.Date(Date)),
+                              sep=" ")),
+    # clusterOptions = markerClusterOptions(),
+    group = "2005_treated file"
+  ) %>%
+  # addCircleMarkers(data = sf_gridmet,
+  #   radius = 2,
+  #   color = "black",
+  #   stroke = F,
+  #   fillOpacity = 1,
+  #   group = "gridMet points"
+  # ) %>%
+   addLayersControl(overlayGroups = c("2002_47 files",
+                                      "2002_treated files",
+                                      "2003_47 files", 
+                                      "2003_surveyed files",
+                                      "2003_treated files",
+                                      "2003_a13 files",
+                                      "2004_surveyed_fin_mc04 file",
+                                      "2004_surveyed file",
+                                      "2004_treated file",
+                                      "2004_Fixed_04_treated file",
+                                      "2005_surveyed file",
+                                      "2005_treated file"),
+                                      # "gridMet points"),
+                   options = layersControlOptions(collapsed = TRUE))
+
+```
+
+
+## Timeline viewer
+
+```{r timeline}
+library(sf)
+library(dplyr)
+library(leaflet)
+library(leaftime)
+library(htmltools)
+
+df_timeline = df_2003_all
+date_var = "Date1"
+filter_q = TRUE
+sp_var = "Species1"
+den_var = "PersqYd"
+
+NV = st_read("/Users/plorch/Documents/COVID-19/UScounties/UScounties.shp", quiet = TRUE) %>% 
+  filter(STATE_NAME == "Nevada") 
+NV_centroids = NV %>%
+    mutate(geometry = st_transform(st_centroid(st_transform(geometry,3734)),4326))
+
+df_timeline_mc = df_timeline %>%
+  filter(grepl("simplex",get(sp_var))|
+               is.na(get(sp_var)),get(date_var) >= "2003-01-01") %>%
+  mutate(start = get(date_var), 
+         end = get(date_var),
+         color = ifelse(is.na(get(den_var)),"grey", 
+                        ifelse(get(den_var)> 0, "red", "black")),
+         radius = ((20 * (get(den_var)/max(na.omit(get(den_var))))) + 3)
+  )
+
+geo_timeline = geojsonio::geojson_json(df_timeline_mc,lat="Latitude",lon="Longitude") 
+
+geo_timeline %>%
+  leaflet() %>% 
+  addTiles() %>%
+  setView(-117.039860, 39.482480, 6) %>%
+  addPolygons(data=NV$geometry,
+              fill = F,
+              weight = 1,
+              color = "black"
+  ) %>%
+  addLabelOnlyMarkers(data = NV_centroids,
+                      label = ~NAME,
+                      labelOptions = labelOptions(permanent = T,
+                                                  direction = 'center',
+                                                  textOnly = TRUE)
+  ) %>%
+  addTimeline(
+    timelineOpts = timelineOptions(
+      pointToLayer = htmlwidgets::JS(
+"
+function(data, latlng) {
+  return L.circleMarker(latlng, {
+    radius: +data.properties.radius,
+    color: data.properties.color,
+    fillColor: data.properties.color, 
+    fillOpacity: 0.5
+  })
+}
+"
+      ),
+    style = NULL
+    )
+  )
+
+```
+
+
+## Questions for Bob or Curtis Irwin at NDA (775 750-2463)
+
+See https://github.com/plorch/MormonCricket/wiki/
